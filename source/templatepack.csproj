@@ -16,37 +16,27 @@
     <IncludeContentInPack>true</IncludeContentInPack>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <ContentTargetFolders>content</ContentTargetFolders>
-
-<!--    <NoWarn>$(NoWarn);NU5128</NoWarn>  -->
     <NoDefaultExcludes>true</NoDefaultExcludes>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
 
     <PackageProjectUrl>https://github.com/finebits/Dotnet.Templates</PackageProjectUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
 
-
-<!--
     <RepositoryUrl>https://github.com/finebits/Dotnet.Templates</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
--->
-
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-
-
-<!--
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>icon.png</PackageIcon>
--->
 
   </PropertyGroup>
 
   <ItemGroup>
+
     <Content Include="templates\**\*" Exclude="templates\**\bin\**;templates\**\obj\**;templates\**\.vs\**" />
-
-<!--
-   <None Include="README.md" Pack="true" PackagePath="\" />
-   <None Include="images\icon.png" Pack="true" PackagePath="\"/>
--->
-
+    <None Include=".\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include=".\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="images\icon.png" Pack="true" PackagePath="\" />
     <Compile Remove="**\*" />
+
   </ItemGroup>
 
 </Project>

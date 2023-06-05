@@ -1,3 +1,7 @@
+/nupkgs/
+/source/.vs/
+/source/bin/
+/source/obj/
 /source/templates/Template.Console/.vs/
 /source/templates/Template.Console/bin/
 /source/templates/Template.Console/obj/
