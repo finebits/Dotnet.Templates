@@ -1,0 +1,41 @@
+name: Build Templates
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  build:
+
+    strategy:
+
+      runs-on: ubuntu-latest
+
+      matrix:
+        configuration: [Debug, Release]
+        template:
+          [
+            "source/templates/Template.Console/Template.Console.csproj",
+          ]
+
+    env:
+      Configuration: ${{ matrix.configuration }}
+      Template: ${{ matrix.template }}
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 7.0.x
+
+    - name: Build the Template
+      run: dotnet build "${{ env.Template }}" --nologo --configuration "${{ env.Configuration }}"
