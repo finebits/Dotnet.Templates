@@ -13,6 +13,9 @@ jobs:
   pack-templates:
     runs-on: ubuntu-latest
 
+    outputs:
+      pack-name: ${{ steps.pack.outputs.pack-name }}
+
     env:
       template-pack: "source/templatepack.csproj"
       output-name: "finebits.dotnet.templates"
@@ -34,16 +37,21 @@ jobs:
       uses: finebits/github-actions/version-number@main
 
     - name: Pack templates
-      run: dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
+      id: pack
+      run: |
+        echo "pack-name=${{ env.output-name }} v${{ env.version }}" >> $GITHUB_OUTPUT
+        dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
       env:
         version: ${{ steps.version-number.outputs.semantic-version }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: pack
+        name: ${{ env.pack-name }}
         path: |
           ${{ env.pack-root }}
+      env: 
+        pack-name: ${{ steps.pack.outputs.pack-name }}
 
   validate-templates:
     runs-on: ubuntu-latest
@@ -66,8 +74,10 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: pack
+          name: ${{ env.pack-name }}
           path: ${{ env.pack-root }}
+        env: 
+          pack-name: ${{ needs.pack-templates.outputs.pack-name }}
 
       - name: Install package
         run: dotnet new install "${{ env.pack-root }}/*.nupkg"
