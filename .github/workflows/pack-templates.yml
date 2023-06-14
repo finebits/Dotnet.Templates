@@ -3,15 +3,16 @@ name: Pack Templates
 on:
   workflow_dispatch:
 
+env:
+  pack-root: "${{ github.workspace }}/nupkgs"
+
 jobs:
 
-  pack:
-
+  pack-templates:
     runs-on: ubuntu-latest
 
     env:
       template-pack: "source/templatepack.csproj"
-      output-root: "nupkgs/output"
       output-name: "finebits.dotnet.templates"
 
     steps:
@@ -22,7 +23,7 @@ jobs:
         submodules: recursive
 
     - name: Install .NET Core
-      uses: actions/setup-dotnet@v2
+      uses: actions/setup-dotnet@v3
       with:
         dotnet-version: 7.0.x
 
@@ -31,17 +32,60 @@ jobs:
       uses: finebits/github-actions/version-number@main
 
     - name: Pack templates
-      run: dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.output-root }}" --p:PackageVersion="${{ env.version }}"
+      run: dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
       env:
         version: ${{ steps.version-number.outputs.semantic-version }}
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: "${{ env.artifact-name }} [${{ env.version }}]"
+        name: pack
         path: |
-          ${{ env.output }}
-      env:
-        artifact-name: "${{ env.output-name }}"
-        version: ${{ steps.version-number.outputs.semantic-version }}
-        output: "${{ env.output-root }}"
+          ${{ env.pack-root }}
+
+  validate-templates:
+    runs-on: ubuntu-latest
+    needs: [ pack-templates ]
+    strategy:
+      matrix:
+        template-name:
+          [
+            "finebits-console-app",
+          ]
+          
+    env:
+      template-name: ${{ matrix.template-name }}
+      
+    steps:
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: pack
+          path: ${{ env.pack-root }}
+
+      - name: Install package
+        run: dotnet new install "${{ env.pack-root }}/*.nupkg"
+       
+      - name: Create project
+        run: dotnet new ${{ env.template-name }} -o "new_project"
+
+  deploy-templates:
+    runs-on: ubuntu-latest
+    needs: [ validate-templates ]
+    steps:
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 7.0.x
+
+      - uses: actions/download-artifact@v3
+        with:
+          name: pack
+          path: ${{ env.pack-root }}
+          
+      - name: Publish NuGet package
+        run: dotnet nuget push "${{ env.pack-root }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
