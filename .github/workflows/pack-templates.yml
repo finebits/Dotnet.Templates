@@ -2,6 +2,8 @@ name: Pack Templates
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
 
 env:
   pack-root: "${{ github.workspace }}/nupkgs"
@@ -74,6 +76,7 @@ jobs:
         run: dotnet new ${{ env.template-name }} -o "new_project"
 
   deploy-templates:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     needs: [ validate-templates ]
     steps:
