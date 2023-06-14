@@ -30,9 +30,9 @@ jobs:
       uses: finebits/github-actions/version-number@main
 
     - name: Pack templates
-      run: dotnet pack "${{ env.template-pack }}" --nologo --output "${{ env.output-root }}" --p:PackageVersion "${{ env.version }}"
+      run: dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.output-root }}" --p:PackageVersion="${{ env.version }}"
       env:
-        version: ${{ steps.version-number.outputs.semantic-version }}"
+        version: ${{ steps.version-number.outputs.semantic-version }}
 
     - name: Archive artifacts
       uses: actions/upload-artifact@v3
@@ -42,5 +42,5 @@ jobs:
           ${{ env.output }}
       env:
         artifact-name: "${{ env.output-name }}"
-        version: "${{ steps.number-version.outputs.semantic-version }}"
+        version: ${{ steps.number-version.outputs.semantic-version }}
         output: "${{ env.output-root }}"
