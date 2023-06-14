@@ -1,0 +1,46 @@
+name: Pack Templates
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  pack:
+
+    runs-on: ubuntu-latest
+
+    env:
+      template-pack: "source/templatepack.csproj"
+      output-root: "nupkgs/output"
+      output-name: "finebits.dotnet.templates"
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+        submodules: recursive
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v2
+      with:
+        dotnet-version: 7.0.x
+
+    - id: version-number
+      uses: finebits/github-actions/version-number@main
+
+    - name: Pack templates
+      run: dotnet pack "${{ env.template-pack }}" --nologo --output "${{ env.output-root }}" --p:PackageVersion "${{ env.version }}"
+      env:
+        version: ${{ steps.version-number.outputs.semantic-version }}"
+
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: "${{ env.artifact-name }} [${{ env.version }}]"
+        path: |
+          ${{ env.output }}
+      env:
+        artifact-name: "${{ env.output-name }}"
+        version: "${{ steps.number-version.outputs.semantic-version }}"
+        output: "${{ env.output-root }}"
