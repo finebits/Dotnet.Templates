@@ -39,7 +39,7 @@ jobs:
     - name: Pack templates
       id: pack
       run: |
-        echo "pack-name=${{ env.output-name }} v${{ env.version }}" >> $GITHUB_OUTPUT
+        echo "pack-name=${{ env.output-name }}-v${{ env.version }}" >> $GITHUB_OUTPUT
         dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
       env:
         version: ${{ steps.version-number.outputs.semantic-version }}
@@ -88,7 +88,7 @@ jobs:
   deploy-templates:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    needs: [ validate-templates ]
+    needs: [pack-templates, validate-templates]
     steps:
       - name: Install .NET Core
         uses: actions/setup-dotnet@v3
@@ -97,8 +97,10 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: pack
+          name: ${{ env.pack-name }}
           path: ${{ env.pack-root }}
+        env: 
+          pack-name: ${{ needs.pack-templates.outputs.pack-name }}
           
       - name: Publish NuGet package
         run: dotnet nuget push "${{ env.pack-root }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
