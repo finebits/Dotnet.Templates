@@ -26,7 +26,8 @@ jobs:
       with:
         dotnet-version: 7.0.x
 
-    - id: version-number
+    - name: New version number
+      id: version-number
       uses: finebits/github-actions/version-number@main
 
     - name: Pack templates
@@ -34,7 +35,7 @@ jobs:
       env:
         version: ${{ steps.version-number.outputs.semantic-version }}
 
-    - name: Archive artifacts
+    - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
         name: "${{ env.artifact-name }} [${{ env.version }}]"
@@ -42,5 +43,5 @@ jobs:
           ${{ env.output }}
       env:
         artifact-name: "${{ env.output-name }}"
-        version: ${{ steps.number-version.outputs.semantic-version }}
+        version: ${{ steps.version-number.outputs.semantic-version }}
         output: "${{ env.output-root }}"
