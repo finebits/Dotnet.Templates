@@ -7,6 +7,8 @@ on:
 
 env:
   pack-root: "${{ github.workspace }}/nupkgs"
+  cert-root: "${{ github.workspace }}/certs"
+  certificate: ${{ secrets.NUGET_SIGNING_CERT_BASE64 }}
 
 jobs:
 
@@ -43,6 +45,15 @@ jobs:
         dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
       env:
         version: ${{ steps.version-number.outputs.semantic-version }}
+        
+    - name: Pack signing
+      if: ${{ env.certificate != '' }}
+      run: |
+        mkdir -p ${{ env.cert-root }}
+        echo "${{ env.certificate }}" | base64 --decode > "${{ env.certificate-file }}"
+        dotnet nuget sign "${{ env.pack-root }}/*.nupkg" --certificate-path="${{ env.certificate-file }}" --certificate-password="${{ secrets.NUGET_SIGNING_CERT_PASSWORD }}" --timestamper "http://timestamp.digicert.com"
+      env:
+        certificate-file: "${{ env.cert-root }}/cert.pfx"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
@@ -79,6 +90,10 @@ jobs:
         env: 
           pack-name: ${{ needs.pack-templates.outputs.pack-name }}
 
+      - name: Verify package
+        if: ${{ env.certificate != '' }}
+        run: dotnet nuget verify "${{ env.pack-root }}/*.nupkg"
+
       - name: Install package
         run: dotnet new install "${{ env.pack-root }}/*.nupkg"
        
@@ -104,3 +119,4 @@ jobs:
           
       - name: Publish NuGet package
         run: dotnet nuget push "${{ env.pack-root }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        
