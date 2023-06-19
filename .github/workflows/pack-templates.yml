@@ -1,3 +1,21 @@
+################################################################################
+#                                                                              #
+#   Copyright 2023 Finebits (https://finebits.com)                             #
+#                                                                              #
+#   Licensed under the Apache License, Version 2.0 (the "License");            #
+#   you may not use this file except in compliance with the License.           #
+#   You may obtain a copy of the License at                                    #
+#                                                                              #
+#       http://www.apache.org/licenses/LICENSE-2.0                             #
+#                                                                              #
+#   Unless required by applicable law or agreed to in writing, software        #
+#   distributed under the License is distributed on an "AS IS" BASIS,          #
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.   #
+#   See the License for the specific language governing permissions and        #
+#   limitations under the License.                                             #
+#                                                                              #
+################################################################################
+
 name: Pack Templates
 
 on:
@@ -6,21 +24,20 @@ on:
     types: [published]
 
 env:
-  pack-root: "${{ github.workspace }}/nupkgs"
-  cert-root: "${{ github.workspace }}/certs"
+  package-root: "${{ github.workspace }}/nupkgs"
+  certificate-root: "${{ github.workspace }}/certificates"
   certificate: ${{ secrets.NUGET_SIGNING_CERT_BASE64 }}
-
+  certificate-password: ${{ secrets.NUGET_SIGNING_CERT_PASSWORD }}
+  template-pack-project: "source/templatepack.csproj"
+  artifact-name: Finebits.Dotnet.Templates
+  nuget-apikey: ${{ secrets.NUGET_APIKEY }}
 jobs:
 
   pack-templates:
     runs-on: ubuntu-latest
 
     outputs:
-      pack-name: ${{ steps.pack.outputs.pack-name }}
-
-    env:
-      template-pack: "source/templatepack.csproj"
-      output-name: "finebits.dotnet.templates"
+      artifact-full-name: ${{ steps.package.outputs.artifact-full-name }}
 
     steps:
     - name: Checkout
@@ -34,35 +51,41 @@ jobs:
       with:
         dotnet-version: 7.0.x
 
-    - name: New version number
-      id: version-number
-      uses: finebits/github-actions/version-number@main
+    - name: Get version number
+      id: version
+      uses: finebits/github-actions/version-number@v1
+      
+    - name: Save package parameters
+      id: package 
+      run: |
+        echo "package-version=${{ env.package-version }}" >> $GITHUB_OUTPUT
+        echo "artifact-full-name=${{ env.artifact-name }}-v${{ env.package-version }}" >> $GITHUB_OUTPUT
+      env:
+        package-version: ${{ steps.version.outputs.semantic-hash-version }}
 
     - name: Pack templates
       id: pack
-      run: |
-        echo "pack-name=${{ env.output-name }}-v${{ env.version }}" >> $GITHUB_OUTPUT
-        dotnet pack "${{ env.template-pack }}" --nologo --output="${{ env.pack-root }}" --p:PackageVersion="${{ env.version }}"
+      run: dotnet pack "${{ env.template-pack-project }}" --output="${{ env.package-root }}" --p:PackageVersion="${{ env.version }}"
       env:
-        version: ${{ steps.version-number.outputs.semantic-version }}
+        version: ${{ steps.package.outputs.package-version }}
 
     - name: Pack signing
-      if: ${{ env.certificate != '' }}
+      if: ${{ env.certificate != '' && env.certificate-password != '' }}
       run: |
-        mkdir -p ${{ env.cert-root }}
+        mkdir -p ${{ env.certificate-root }}
         echo "${{ env.certificate }}" | base64 --decode > "${{ env.certificate-file }}"
-        dotnet nuget sign "${{ env.pack-root }}/*.nupkg" --certificate-path="${{ env.certificate-file }}" --certificate-password="${{ secrets.NUGET_SIGNING_CERT_PASSWORD }}" --timestamper "http://timestamp.digicert.com"
+        dotnet nuget sign "${{ env.package-root }}/*.nupkg" --certificate-path="${{ env.certificate-file }}" --certificate-password="${{ env.certificate-password }}" --timestamper "http://timestamp.digicert.com"
       env:
-        certificate-file: "${{ env.cert-root }}/cert.pfx"
+        certificate-file: "${{ env.certificate-root }}/certificate.pfx"
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ env.pack-name }}
+        name: ${{ env.artifact-full-name }}
         path: |
-          ${{ env.pack-root }}
+          ${{ env.package-root }}
       env: 
-        pack-name: ${{ steps.pack.outputs.pack-name }}
+        artifact-full-name: ${{ steps.package.outputs.artifact-full-name }}
 
   validate-templates:
     runs-on: ubuntu-latest
@@ -85,25 +108,49 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: ${{ env.pack-name }}
-          path: ${{ env.pack-root }}
+          name: ${{ env.artifact-full-name }}
+          path: ${{ env.package-root }}
         env: 
-          pack-name: ${{ needs.pack-templates.outputs.pack-name }}
+          artifact-full-name: ${{ needs.pack-templates.outputs.artifact-full-name }}
 
       - name: Verify package
         if: ${{ env.certificate != '' }}
-        run: dotnet nuget verify "${{ env.pack-root }}/*.nupkg"
+        run: dotnet nuget verify "${{ env.package-root }}/*.nupkg"
 
       - name: Install package
-        run: dotnet new install "${{ env.pack-root }}/*.nupkg"
+        run: dotnet new install "${{ env.package-root }}/*.nupkg"
        
       - name: Create project
         run: dotnet new ${{ env.template-name }} -o "new_project"
 
-  deploy-templates:
-    if: ${{ github.event_name == 'release' && secrets.NUGET_APIKEY != '' && env.certificate != '' }} 
+  can-deploy:
     runs-on: ubuntu-latest
-    needs: [pack-templates, validate-templates]
+    outputs:
+      status: ${{ steps.checker.outputs.status }}
+    steps:
+      - id: check-certificate
+        if: ${{ env.certificate == '' }}
+        run: |
+          echo "Repository secret 'NUGET_SIGNING_CERT_BASE64' not found."
+        
+      - id: check-nuget-apikey
+        if: ${{ env.nuget-apikey == '' }}
+        run: |
+          echo "Repository secret 'NUGET_APIKEY' not found."
+        
+      - id: checker
+        run: |
+          no_certificate=${{ steps.check-certificate.outcome == 'success' }}
+          no_apikey=${{ steps.check-nuget-apikey.outcome == 'success' }}
+          status=$([[ $no_certificate == false && $no_apikey == false ]] && echo yes || echo no)
+          echo "status=$status" >> $GITHUB_OUTPUT
+          echo "status:  $status"
+      
+  deploy-templates:
+    runs-on: ubuntu-latest
+    needs: [pack-templates, validate-templates, can-deploy ]
+
+    if: ${{ github.event_name == 'release' && needs.can-deploy.outputs.status == 'yes' }}
     steps:
       - name: Install .NET Core
         uses: actions/setup-dotnet@v3
@@ -112,10 +159,10 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          name: ${{ env.pack-name }}
-          path: ${{ env.pack-root }}
+          name: ${{ env.artifact-full-name }}
+          path: ${{ env.package-root }}
         env: 
-          pack-name: ${{ needs.pack-templates.outputs.pack-name }}
+          artifact-full-name: ${{ needs.pack-templates.outputs.artifact-full-name }}
 
       - name: Publish NuGet package
-        run: dotnet nuget push "${{ env.pack-root }}/*.nupkg" --api-key "${{ secrets.NUGET_APIKEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        run: dotnet nuget push "${{ env.package-root }}/*.nupkg" --api-key "${{ env.nuget-apikey }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
